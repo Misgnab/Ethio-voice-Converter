@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Suppress Vite HMR WebSocket connection failure per environment constraints (HMR is disabled in AI Studio) -->
+    <script>
+      (function () {
+        const NativeWebSocket = window.WebSocket;
+        if (NativeWebSocket) {
+          window.WebSocket = function (url, protocols) {
+            const isViteHmr =
+              protocols === 'vite-hmr' ||
+              (typeof url === 'string' && (url.includes(':24678') || url.includes('token=') || url.includes('vite-hmr')));
+            if (isViteHmr) {
+              const mockWs = new EventTarget();
+              mockWs.binaryType = 'blob';
+              mockWs.readyState = 1; // OPEN
+              mockWs.bufferedAmount = 0;
+              mockWs.extensions = '';
+              mockWs.protocol = 'vite-hmr';
+              mockWs.url = typeof url === 'string' ? url : '';
+              mockWs.send = function () {};
+              mockWs.close = function () {
+                mockWs.readyState = 3;
+                try {
+                  const closeEvt = new CloseEvent('close', { wasClean: true, code: 1000 });
+                  if (typeof mockWs.onclose === 'function') mockWs.onclose(closeEvt);
+                  mockWs.dispatchEvent(closeEvt);
+                } catch (_) {}
+              };
+              setTimeout(() => {
+                try {
+                  const openEvt = new Event('open');
+                  if (typeof mockWs.onopen === 'function') mockWs.onopen(openEvt);
+                  mockWs.dispatchEvent(openEvt);
+                } catch (_) {}
+              }, 0);
+              return mockWs;
+            }
+            return new NativeWebSocket(url, protocols);
+          };
+          window.WebSocket.prototype = NativeWebSocket.prototype;
+          window.WebSocket.CONNECTING = 0;
+          window.WebSocket.OPEN = 1;
+          window.WebSocket.CLOSING = 2;
+          window.WebSocket.CLOSED = 3;
+        }
+
+        window.addEventListener('unhandledrejection', function (e) {
+          const msg = String(e?.reason?.message || '');
+          const stack = String(e?.reason?.stack || '');
+          if (
+            msg.includes('WebSocket') ||
+            msg.includes('vite:ws') ||
+            stack.includes('createWebSocketModuleRunnerTransport') ||
+            stack.includes('@vite/client')
+          ) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function (e) {
+          const msg = String(e?.message || '');
+          const filename = String(e?.filename || '');
+          const stack = String(e?.error?.stack || '');
+          if (
+            msg.includes('WebSocket') ||
+            filename.includes('@vite/client') ||
+            stack.includes('createWebSocketModuleRunnerTransport')
+          ) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EthioVoice | Multilingual Ethiopian AI Speech & Voice Ecosystem</title>
+    <meta
+      name="description"
+      content="Next-generation AI-powered multilingual Ethiopian Text-to-Speech platform and voice ecosystem for Amharic, Tigrinya, Afaan Oromoo, and English."
+    />
+    <meta name="keywords" content="Ethiopian TTS, Amharic Text to Speech, Tigrinya Voice, Afaan Oromoo Speech, Ge'ez Phonetics, Ethiopian Voice AI, Telebirr, EthioVoice" />
+    <meta name="author" content="EthioVoice Labs" />
+
+    <!-- OpenGraph Social Cards -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="EthioVoice" />
+    <meta property="og:title" content="EthioVoice | Multilingual Ethiopian AI Speech & Voice Ecosystem" />
+    <meta
+      property="og:description"
+      content="Next-generation AI-powered multilingual Ethiopian Text-to-Speech platform and voice ecosystem for Amharic, Tigrinya, Afaan Oromoo, and English."
+    />
+
+    <!-- Twitter / X Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="EthioVoice | Multilingual Ethiopian AI Speech & Voice Ecosystem" />
+    <meta
+      name="twitter:description"
+      content="Next-generation AI-powered multilingual Ethiopian Text-to-Speech platform and voice ecosystem for Amharic, Tigrinya, Afaan Oromoo, and English."
+    />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "EthioVoice",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "All modern web browsers",
+      "description": "Next-generation AI-powered multilingual Ethiopian Text-to-Speech platform and voice ecosystem for Amharic, Tigrinya, Afaan Oromoo, and English.",
+      "inLanguage": ["am", "ti", "om", "en"],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "ETB"
+      },
+      "featureList": [
+        "Real-time Ethiopian Neural Text-to-Speech",
+        "13 Authentic Voice Personas across Amharic, Tigrinya, Oromo, and English",
+        "Ge'ez Fidel Phonetic Transliteration & Normalization",
+        "Continuous Document & Manuscript Reader",
+        "Optical Character Recognition (OCR) for Ancient Parchments & Modern Prints",
+        "Telebirr and Chapa Ethiopian Payment Integration"
+      ]
+    }
+    </script>
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23006241'/><circle cx='50' cy='50' r='28' fill='%23D97706' opacity='0.2'/><path d='M35 50h6v12h-6zm12-16h6v28h-6zm12-8h6v36h-6zm12 12h6v24h-6z' fill='%23FCD34D'/><circle cx='50' cy='20' r='5' fill='%23FFFFFF'/></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-[#F8F9FA] text-slate-800 antialiased selection:bg-[#006241] selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

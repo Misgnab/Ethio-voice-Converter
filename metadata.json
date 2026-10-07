@@ -1,0 +1,10 @@
+{
+  "name": "Remix EthioVoice Simplifiying",
+  "description": "Next-generation AI-powered multilingual Ethiopian Text-to-Speech platform and voice ecosystem for Amharic, Tigrinya, Afaan Oromoo, and English.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
