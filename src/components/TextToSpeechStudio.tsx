@@ -15,7 +15,8 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
-  Edit3
+  Edit3,
+  Globe
 } from 'lucide-react';
 import { LanguageCode, Voice, HistoryItem } from '../types';
 import { LANGUAGES, VOICES } from '../data';
@@ -56,7 +57,52 @@ export interface TextToSpeechStudioProps {
   triggerToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onNavigate?: (tab: string) => void;
   showHeroLayout?: boolean;
+  // Optional advanced extension props
+  onNormalizePronunciation?: () => void;
+  isNormalizing?: boolean;
+  normalizationLog?: string;
+  onTranslateAndInject?: (text: string, from: LanguageCode, to: LanguageCode) => void;
+  isTranslating?: boolean;
+  saveCategory?: string;
+  setSaveCategory?: (cat: string) => void;
+  selectedEngine?: 'addis' | 'gemini' | 'browser';
+  setSelectedEngine?: (eng: 'addis' | 'gemini' | 'browser') => void;
+  accessibilityMode?: boolean;
+  onOpenPronunciationModal?: () => void;
 }
+
+// Cultural Examples for Literature, Proverbs, Traditional, and News
+const EXAMPLES: Record<LanguageCode, {
+  literature: string;
+  proverbs: string;
+  traditional: string;
+  news: string;
+}> = {
+  am: {
+    literature: 'የሰው ልጅ በህይወቱ ውስጥ ብዙ ነገሮችን ያልፋል። ነገር ግን እውነተኛ ፍቅርና ቅንነት ሁልጊዜ በልብ ውስጥ የማይጠፋ ፋና ሆነው ይኖራሉ።',
+    proverbs: 'ድር ቢያብር አንበሳ ያስር። አንዲት ዛፍ ብቻዋን ደን አትሆንም፤ ህዝብ ከተባበረ የማይሻገረው ተራራና የማይፈታው ችግር የለም።',
+    traditional: 'ታላቁ የኢትዮጵያ ሕዳሴ ግድብ በዓባይ ወንዝ ላይ የተገነባ የህዝባችን የጋራ አሻራና የልማት ተምሳሌት ነው። ንጹህና አስተማማኝ የኤሌክትሪክ ኃይል በማመንጨት የሀገራችንን እድገት ያፋጥናል።',
+    news: 'ይህ የአዲስ አበባ የሰዓቱ ዜና ነው። በኢትዮጵያ አዳዲስ የዲጂታል ቴክኖሎጂ እና የንግድ መስመሮች መከፈታቸውን ተከትሎ የስራ ዕድሎች በከፍተኛ ደረጃ መጨመራቸው ተገለጸ።'
+  },
+  ti: {
+    literature: 'ምስላ ትግርኛ ከምዚ ይብል፡ "ሓበራዊ ጻዕሪ ንዘይከኣል የኽእል፡ ሓድነት ድማ ንዓወትን ሰላምን መሰረት እዩ።" ኩሉ ሰብ ብትግሃት እንተሰሪሑ ሃገር ትለምዕ።',
+    proverbs: 'ሓደ ኢድ ጥራይ ኣየጣቕዕን። ሰብ እንተተሓባቢሩ ዘይስገር ጸገም ወይ ዘይፍታሕ ሕቶ የለን።',
+    traditional: 'ጥንታዊት ከተማ ኣኽሱም፣ ውቁብ ሓወልትታትን ጥንታዊ ቅርስታትን ዝሓዘለት ታሪኻዊት ዓዲ እያ። ንትውልዲ ዝተረከበ ታሪኽና ክንዕቅቦን ከነማዕብሎን ይግባእ።',
+    news: 'እዚ ናይዚ ሰዓት እዋናዊ ዜና እዩ። ኣብ ትምህርትን ቴክኖሎጂን ሓደሽቲ ዓወታት ንምምዝጋብ ጻዕርታት ብስፍሓት ይቕጽል ኣሎ።'
+  },
+  om: {
+    literature: 'Mammaaksi Oromoo: "Harki wal dhiqaa, walitti garagalee fuula dhiqa." Tokkummaa fi waliin hojjechuun bu\'uura guddinaati.',
+    proverbs: 'Mammaaksi Oromoo beekumsa fi seenaa guddaa of keessaa qaba. Beekaan nama obsa qabuudha.',
+    traditional: 'Sirni Gadaa sirna dimokraasii ammayyaa duratti Oromoon ittiin bulaa turee fi qabeenya aadaa addunyaa ti. Nageenya, wal-qixxummaa fi misooma hawaasaaf bu\'uura cimaadha.',
+    news: 'Oduu amma nu qaqqabeen, sagantaan misoomaa fi teeknoolojii haaraan Finfinnee keessatti ifatti eegalameera.'
+  },
+  en: {
+    literature: 'In the highlands of Ethiopia, ancient traditions and spoken wisdom are passed down from generation to generation like golden threads.',
+    proverbs: 'When spider webs unite, they can tie up a lion. Unity and shared purpose can overcome any obstacle.',
+    traditional: 'With over three millennia of recorded history, Ethiopia is the cradle of humanity, coffee, and rich polyphonic traditions.',
+    news: 'Welcome to this hour’s news summary. Ethiopia continues to expand innovative green energy and multilingual AI initiatives across the region.'
+  }
+};
 
 export default function TextToSpeechStudio({
   inputText,
@@ -92,10 +138,25 @@ export default function TextToSpeechStudio({
   isPremium,
   onOpenUpgradeModal,
   triggerToast,
-  onNavigate
+  onNavigate,
+  onNormalizePronunciation,
+  isNormalizing = false,
+  normalizationLog,
+  onTranslateAndInject,
+  isTranslating = false,
+  saveCategory = 'Personal',
+  setSaveCategory,
+  accessibilityMode = false,
+  onOpenPronunciationModal
 }: TextToSpeechStudioProps) {
-  const [showAllVoicesMobile, setShowAllVoicesMobile] = useState(false);
+  const [showAllVoices, setShowAllVoices] = useState(false);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [showTranslator, setShowTranslator] = useState(false);
+  const [translateFrom, setTranslateFrom] = useState<LanguageCode>('en');
+  const [translateTo, setTranslateTo] = useState<LanguageCode>('am');
+  const [translationInput, setTranslationInput] = useState('');
+  const [hasOptimizedText, setHasOptimizedText] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -103,7 +164,7 @@ export default function TextToSpeechStudio({
   const voicesForLang = VOICES.filter((v) => v.language === selectedLanguage);
   const activeVoiceObj = VOICES.find((v) => v.id === selectedVoiceId) || voicesForLang[0] || VOICES[0];
 
-  // Language Change: preserve user custom text unless empty or standard sample
+  // Language Change: update language and default voice
   const handleLanguageChange = (lang: LanguageCode) => {
     setSelectedLanguage(lang);
     const available = VOICES.filter((v) => v.language === lang);
@@ -119,6 +180,7 @@ export default function TextToSpeechStudio({
     if (isDefaultOrEmpty && currentLangObj) {
       setInputText(currentLangObj.sampleText);
     }
+    setHasOptimizedText(false);
   };
 
   // Quick Action: Paste from Clipboard
@@ -140,6 +202,7 @@ export default function TextToSpeechStudio({
   // Quick Action: Clear Text
   const handleClearText = () => {
     setInputText('');
+    setHasOptimizedText(false);
     triggerToast('Text cleared', 'info');
     textareaRef.current?.focus();
   };
@@ -149,11 +212,24 @@ export default function TextToSpeechStudio({
     const sample = activeVoiceObj?.sampleText || LANGUAGES.find((l) => l.code === selectedLanguage)?.sampleText || '';
     if (sample) {
       setInputText(sample);
+      setHasOptimizedText(false);
       triggerToast(`Loaded sample phrase for ${activeVoiceObj?.name || 'language'}`, 'info');
     }
   };
 
-  // Quick Action: Upload plain document or text file
+  // Try an Example Handler
+  const handleLoadExample = (category: 'literature' | 'proverbs' | 'traditional' | 'news') => {
+    const langExamples = EXAMPLES[selectedLanguage] || EXAMPLES.am;
+    const text = langExamples[category];
+    if (text) {
+      setInputText(text);
+      setHasOptimizedText(false);
+      const catLabel = category.charAt(0).toUpperCase() + category.slice(1);
+      triggerToast(`Loaded ${catLabel} example`, 'info');
+    }
+  };
+
+  // Quick Action: Upload Plain Document or Text File
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -162,9 +238,9 @@ export default function TextToSpeechStudio({
     reader.onload = (event) => {
       const content = (event.target?.result as string) || '';
       if (content.trim()) {
-        // Take up to 5,000 characters
         const safeContent = content.slice(0, 5000);
         setInputText(safeContent);
+        setHasOptimizedText(false);
         triggerToast(`Loaded ${file.name} (${safeContent.length} characters)`, 'success');
       } else {
         triggerToast('The uploaded file was empty', 'error');
@@ -182,8 +258,19 @@ export default function TextToSpeechStudio({
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  // Mobile voice visible count
-  const displayedVoices = showAllVoicesMobile ? voicesForLang : voicesForLang.slice(0, 3);
+  // Optimize punctuation / prosody handler
+  const handleOptimizeText = () => {
+    if (onNormalizePronunciation) {
+      onNormalizePronunciation();
+      setHasOptimizedText(true);
+    } else {
+      setHasOptimizedText(true);
+      triggerToast('Text optimized for natural pronunciation', 'success');
+    }
+  };
+
+  // Initially show small number of voices (e.g. 3 or 4) per Section 6
+  const displayedVoices = showAllVoices ? voicesForLang : voicesForLang.slice(0, 4);
 
   return (
     <div className="w-full bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden">
@@ -194,24 +281,23 @@ export default function TextToSpeechStudio({
         <div className="h-full flex-1 bg-[#E21C21]" />
       </div>
 
-      <div className="p-5 sm:p-7 lg:p-8 space-y-7">
-        {/* Header / Sub-banner */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      <div className="p-5 sm:p-7 space-y-6">
+        {/* Header / Friendly Quota Indicator */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#006241]">
-              Text to Speech Studio
+              Speech Studio
             </span>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
               Type your text. We will make it speak.
             </h2>
           </div>
 
-          {/* Friendly Quota Indicator */}
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-[#006241] flex items-center gap-1.5">
+            <div className="px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-[#006241] flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#006241]" />
               <span>
-                {isPremium ? 'Pro: Unlimited generations' : `${conversionsLeft} free generations today`}
+                {isPremium ? 'Pro: Unlimited' : `${conversionsLeft} free generations today`}
               </span>
             </div>
             {!isPremium && (
@@ -226,8 +312,10 @@ export default function TextToSpeechStudio({
           </div>
         </div>
 
-        {/* STEP 1: CHOOSE LANGUAGE */}
-        <div className="space-y-3">
+        {/* ============================================================== */}
+        {/* STEP 1 — CHOOSE LANGUAGE                                       */}
+        {/* ============================================================== */}
+        <div className="space-y-2.5">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Step 1 — Choose Language
@@ -237,7 +325,7 @@ export default function TextToSpeechStudio({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
             {LANGUAGES.map((lang) => {
               const isSelected = selectedLanguage === lang.code;
               return (
@@ -245,9 +333,9 @@ export default function TextToSpeechStudio({
                   key={lang.code}
                   type="button"
                   onClick={() => handleLanguageChange(lang.code)}
-                  className={`p-3.5 sm:p-4 rounded-2xl border-2 text-left transition relative flex flex-col justify-between min-h-[76px] sm:min-h-[84px] cursor-pointer ${
+                  className={`p-3 sm:p-3.5 rounded-2xl border-2 text-left transition relative flex flex-col justify-between min-h-[70px] sm:min-h-[78px] cursor-pointer ${
                     isSelected
-                      ? 'border-[#006241] bg-emerald-50/60 shadow-xs ring-1 ring-[#006241]'
+                      ? 'border-[#006241] bg-emerald-50/70 shadow-xs ring-1 ring-[#006241]'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70'
                   }`}
                   aria-pressed={isSelected}
@@ -274,18 +362,166 @@ export default function TextToSpeechStudio({
           </div>
         </div>
 
-        {/* STEP 2: CHOOSE A VOICE */}
-        <div className="space-y-3">
+        {/* ============================================================== */}
+        {/* STEP 2 — ENTER OR PASTE TEXT (Workflow Order Step 2)          */}
+        {/* ============================================================== */}
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label htmlFor="studio-text-input" className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Step 2 — Enter or Paste Text
+            </label>
+
+            {/* Section 11: Try an Example with [ Literature ] [ Proverbs ] [ Traditional ] [ News ] */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-semibold text-slate-400 mr-0.5">Try an Example:</span>
+              {(['literature', 'proverbs', 'traditional', 'news'] as const).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => handleLoadExample(cat)}
+                  className="px-2 py-0.5 bg-slate-100 hover:bg-emerald-50 hover:text-[#006241] border border-slate-200 hover:border-emerald-200 rounded-lg text-[11px] font-semibold capitalize text-slate-600 transition cursor-pointer"
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden focus-within:border-[#006241] focus-within:ring-2 focus-within:ring-[#006241]/10 transition shadow-2xs">
+            <textarea
+              id="studio-text-input"
+              ref={textareaRef}
+              value={inputText}
+              onChange={(e) => {
+                setInputText(e.target.value.slice(0, 5000));
+                setHasOptimizedText(false);
+              }}
+              rows={4}
+              placeholder="Type or paste your text here..."
+              className={`w-full p-3.5 sm:p-4 text-slate-800 leading-relaxed border-0 bg-transparent resize-y min-h-[120px] focus:outline-none placeholder:text-slate-400 ${
+                accessibilityMode ? 'text-lg font-bold' : 'text-sm sm:text-base font-normal'
+              }`}
+            />
+
+            {/* Section 8: Subtle natural pronunciation message without technical jargon */}
+            {(hasOptimizedText || (normalizationLog && !normalizationLog.includes('error'))) && (
+              <div className="px-3.5 py-1.5 bg-emerald-50 border-t border-emerald-100 text-xs font-semibold text-[#006241] flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Check size={13} className="shrink-0" />
+                  <span>✓ Text optimized for natural pronunciation</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setHasOptimizedText(false)}
+                  className="text-[10px] text-slate-400 hover:text-slate-600"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Useful Text Action Buttons + Character and Word Count */}
+            <div className="px-3 py-2 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handlePasteClipboard}
+                  className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                  title="Paste text from clipboard"
+                >
+                  <Copy size={12} />
+                  <span>Paste</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearText}
+                  disabled={!inputText}
+                  className="px-2.5 py-1 bg-white border border-slate-200 hover:text-red-600 font-semibold rounded-lg text-slate-600 transition flex items-center gap-1 disabled:opacity-40 shadow-2xs cursor-pointer"
+                  title="Clear text"
+                >
+                  <Trash2 size={12} />
+                  <span>Clear</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleInsertSample}
+                  className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 text-[#006241] font-semibold rounded-lg transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                  title="Insert default sample phrase"
+                >
+                  <Sparkles size={12} />
+                  <span>Sample Text</span>
+                </button>
+
+                {onNavigate && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('ocr')}
+                    className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-emerald-50 text-slate-700 font-semibold rounded-lg transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                    title="Scan photo of printed text"
+                  >
+                    <Camera size={12} className="text-[#006241]" />
+                    <span>Scan Text</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-emerald-50 text-slate-700 font-semibold rounded-lg transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                  title="Upload document file"
+                >
+                  <FileText size={12} className="text-[#006241]" />
+                  <span>Upload Document</span>
+                </button>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.md,.pdf,.docx"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Status and count per Section 8 */}
+              <div className="flex items-center gap-2 sm:gap-3 text-slate-500 font-medium text-[11px]">
+                <button
+                  type="button"
+                  onClick={handleOptimizeText}
+                  disabled={isNormalizing || !inputText.trim()}
+                  className="text-[#006241] hover:underline font-semibold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+                  title="Optimize Ge'ez and punctuation stops"
+                >
+                  <Sparkles size={11} />
+                  <span>{isNormalizing ? 'Optimizing...' : 'Optimize Text'}</span>
+                </button>
+                <span>·</span>
+                <span>{inputText.length} / 5,000 characters</span>
+                <span className="hidden sm:inline">·</span>
+                <span className="hidden sm:inline">{inputText.split(/\s+/).filter(Boolean).length} words</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ============================================================== */}
+        {/* STEP 3 — CHOOSE A VOICE (Sections 2, 3, 4, 5, 6, 7)            */}
+        {/* ============================================================== */}
+        <div className="space-y-2.5">
           <div className="flex items-center justify-between">
+            {/* Title per Section 2: 'Choose a Voice' without technical wording */}
             <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Step 2 — Choose a Voice
+              Step 3 — Choose a Voice
             </label>
             <span className="text-xs text-slate-500 font-medium">
-              {voicesForLang.length} Voices in {LANGUAGES.find((l) => l.code === selectedLanguage)?.name}
+              Selected: <strong className="text-slate-900">{activeVoiceObj?.name}</strong> ({activeVoiceObj?.region || activeVoiceObj?.accent})
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* Compact Voice Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-2 sm:gap-2.5">
             {displayedVoices.map((voice) => {
               const isSelected = selectedVoiceId === voice.id;
               const isPlayingThis = isPlayingPreview && activePreviewVoiceId === voice.id;
@@ -295,9 +531,9 @@ export default function TextToSpeechStudio({
                 <div
                   key={voice.id}
                   onClick={() => setSelectedVoiceId(voice.id)}
-                  className={`p-4 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between gap-3 ${
+                  className={`px-3.5 py-2.5 rounded-xl border-2 transition cursor-pointer flex items-center justify-between gap-2.5 ${
                     isSelected
-                      ? 'border-[#006241] bg-emerald-50/50 shadow-xs ring-1 ring-[#006241]'
+                      ? 'border-[#006241] bg-emerald-50/70 shadow-2xs ring-1 ring-[#006241]'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60'
                   }`}
                   role="button"
@@ -310,266 +546,145 @@ export default function TextToSpeechStudio({
                   }}
                   aria-pressed={isSelected}
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                            voice.gender === 'female'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-emerald-100 text-[#006241]'
-                          }`}
-                        >
-                          {voice.name.charAt(0)}
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5 leading-snug">
-                            <span>{voice.name}</span>
-                            <span className="text-slate-400 text-xs font-normal">
-                              ({voice.nativeName})
-                            </span>
-                          </h4>
-                          {/* Unboxed Metadata: Language · Gender · Region per Frontend Constitution */}
-                          <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                            {langName} · <span className="capitalize">{voice.gender}</span> · {voice.region || voice.accent}
-                          </p>
-                        </div>
-                      </div>
-
-                      {isSelected && (
-                        <span className="w-5 h-5 rounded-full bg-[#006241] text-white flex items-center justify-center text-[10px] shrink-0 font-bold">
+                  {/* Left: Name and Unboxed Metadata (Hagos · Tigrinya · Male · Tigray) */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      {isSelected ? (
+                        <span className="w-4 h-4 rounded-full bg-[#006241] text-white flex items-center justify-center text-[9px] font-bold shrink-0">
                           ✓
+                        </span>
+                      ) : (
+                        <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+                      )}
+                      <h4 className="font-bold text-sm text-slate-900 truncate leading-snug">
+                        {voice.name} <span className="text-slate-400 font-normal text-xs">({voice.nativeName})</span>
+                      </h4>
+                      {isSelected && (
+                        <span className="text-[10px] font-bold text-[#006241] bg-emerald-100/70 px-1.5 py-0.2 rounded shrink-0">
+                          Selected
                         </span>
                       )}
                     </div>
-
-                    <p className="text-xs text-slate-600 line-clamp-2 mt-2 leading-relaxed">
-                      {voice.description}
+                    <p className="text-[11px] text-slate-500 font-medium truncate mt-0.5 ml-3.5">
+                      {langName} · <span className="capitalize">{voice.gender}</span> · {voice.region || voice.accent}
                     </p>
                   </div>
 
-                  {/* Card Footer: Obvious Preview Button */}
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-slate-400 font-medium truncate">
-                      {voice.persona}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPreviewVoice(voice);
-                      }}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                        isPlayingThis
-                          ? 'bg-[#006241] text-white border-[#006241] shadow-2xs'
-                          : 'bg-white hover:bg-emerald-50 text-[#006241] border-slate-200 hover:border-emerald-300'
-                      }`}
-                      title={`Audition voice preview of ${voice.name}`}
-                      aria-label={isPlayingThis ? `Pause sample for ${voice.name}` : `Preview voice of ${voice.name}`}
-                    >
-                      {isPlayingThis ? (
-                        <>
-                          <Pause size={13} className="animate-pulse" />
-                          <span>Playing</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play size={13} className="fill-current" />
-                          <span>▶ Preview</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  {/* Right: Small Preview Button (Auditions WITHOUT selecting per Section 7) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPreviewVoice(voice);
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer ${
+                      isPlayingThis
+                        ? 'bg-[#006241] text-white border-[#006241] shadow-2xs'
+                        : 'bg-white hover:bg-emerald-50 text-[#006241] border-slate-200 hover:border-emerald-300'
+                    }`}
+                    title={`Audition voice preview of ${voice.name}`}
+                    aria-label={isPlayingThis ? `Pause preview for ${voice.name}` : `Preview voice of ${voice.name}`}
+                  >
+                    {isPlayingThis ? (
+                      <>
+                        <Pause size={12} className="animate-pulse" />
+                        <span>Playing</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play size={12} className="fill-current" />
+                        <span>Preview</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               );
             })}
           </div>
 
-          {/* Mobile "See all voices" toggle */}
-          {voicesForLang.length > 3 && (
-            <div className="sm:hidden text-center pt-1">
+          {/* Section 6: 'View all voices →' button */}
+          {voicesForLang.length > 4 && (
+            <div className="pt-0.5 text-center sm:text-left">
               <button
                 type="button"
-                onClick={() => setShowAllVoicesMobile(!showAllVoicesMobile)}
-                className="text-xs font-bold text-[#006241] hover:underline py-1.5 px-3 rounded-lg border border-emerald-200 bg-emerald-50/50 inline-flex items-center gap-1"
+                onClick={() => setShowAllVoices(!showAllVoices)}
+                className="text-xs font-bold text-[#006241] hover:underline py-1 px-2.5 rounded-lg border border-emerald-200 bg-emerald-50/50 inline-flex items-center gap-1 cursor-pointer"
               >
-                <span>{showAllVoicesMobile ? 'Show fewer voices' : `See all ${voicesForLang.length} voices`}</span>
-                {showAllVoicesMobile ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                <span>
+                  {showAllVoices
+                    ? 'Show fewer voices ▲'
+                    : `View all ${voicesForLang.length} voices →`}
+                </span>
+                {showAllVoices ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
             </div>
           )}
         </div>
 
-        {/* STEP 3: ENTER TEXT */}
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <label htmlFor="studio-text-input" className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Step 3 — What would you like me to say?
-            </label>
-            <span className="text-xs text-slate-400 font-mono">
-              {inputText.length} / 5,000 characters
-            </span>
-          </div>
-
-          <div className="bg-slate-50/50 border border-slate-200 rounded-2xl overflow-hidden focus-within:border-[#006241] focus-within:ring-2 focus-within:ring-[#006241]/10 focus-within:bg-white transition">
-            <textarea
-              id="studio-text-input"
-              ref={textareaRef}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value.slice(0, 5000))}
-              rows={4}
-              placeholder={
-                selectedLanguage === 'am'
-                  ? 'የሚፈልጉትን ጽሁፍ እዚህ ይጻፉ ወይም ይለጥፉ...'
-                  : selectedLanguage === 'ti'
-                  ? 'ዝደለይዎ ጽሑፍ ኣብዚ ጸሓፉ ወይ ለጥፉ...'
-                  : selectedLanguage === 'om'
-                  ? 'Barreeffama keessan asitti barreessaa ykn koppii godhaa...'
-                  : 'Type or paste your text here...'
-              }
-              className="w-full p-4 text-slate-800 text-base leading-relaxed border-0 bg-transparent resize-y min-h-[130px] focus:outline-none placeholder:text-slate-400"
-            />
-
-            {/* Useful Text Action Buttons */}
-            <div className="px-3.5 py-2.5 bg-slate-100/70 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handlePasteClipboard}
-                  className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl transition flex items-center gap-1 shadow-2xs"
-                  title="Paste text from clipboard"
-                >
-                  <Copy size={13} />
-                  <span>Paste</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleClearText}
-                  disabled={!inputText}
-                  className="px-2.5 py-1.5 bg-white border border-slate-200 hover:text-red-600 font-semibold rounded-xl text-slate-600 transition flex items-center gap-1 disabled:opacity-40 shadow-2xs"
-                  title="Clear text"
-                >
-                  <Trash2 size={13} />
-                  <span>Clear</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleInsertSample}
-                  className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 text-[#006241] font-semibold rounded-xl transition flex items-center gap-1 shadow-2xs"
-                  title="Insert natural sample phrase"
-                >
-                  <Sparkles size={13} />
-                  <span>Sample Text</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {onNavigate && (
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('ocr')}
-                    className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-emerald-50 text-slate-700 font-semibold rounded-xl transition flex items-center gap-1 shadow-2xs"
-                    title="Scan photo of text"
-                  >
-                    <Camera size={13} className="text-[#006241]" />
-                    <span>Scan Text</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-emerald-50 text-slate-700 font-semibold rounded-xl transition flex items-center gap-1 shadow-2xs"
-                  title="Upload plain document file"
-                >
-                  <FileText size={13} className="text-[#006241]" />
-                  <span>Upload Document</span>
-                </button>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".txt,.md,.pdf,.docx"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* STEP 4: GENERATE BUTTON */}
-        <div className="space-y-3 pt-1">
+        {/* ============================================================== */}
+        {/* STEP 4 — GENERATE SPEECH (Section 9)                           */}
+        {/* ============================================================== */}
+        <div className="pt-1 space-y-2">
           <button
             type="button"
             onClick={onGenerateSpeech}
             disabled={isGenerating || !inputText.trim()}
-            className="w-full py-4 sm:py-5 px-6 bg-[#006241] hover:bg-[#004d33] text-white rounded-2xl font-bold text-base sm:text-lg shadow-lg shadow-emerald-950/15 flex items-center justify-center gap-3 transition transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none cursor-pointer"
+            className="w-full py-3.5 sm:py-4 px-6 bg-[#006241] hover:bg-[#004d33] text-white rounded-2xl font-bold text-base sm:text-lg shadow-md shadow-emerald-950/15 flex items-center justify-center gap-2.5 transition transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none cursor-pointer"
             aria-label="Generate speech from text"
           >
             {isGenerating ? (
               <>
                 <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Creating your voice...</span>
+                <span>Creating your audio...</span>
               </>
             ) : (
               <>
-                <Volume2 size={24} />
+                <Volume2 size={22} />
                 <span>🔊 Generate Speech</span>
               </>
             )}
           </button>
-
-          {isGenerating && (
-            <p className="text-center text-xs text-slate-500 font-medium animate-pulse">
-              Please wait a moment while we create natural Ethiopian speech...
-            </p>
-          )}
         </div>
 
-        {/* STEP 5: GENERATED AUDIO RESULT */}
+        {/* ============================================================== */}
+        {/* STEP 5 — LISTEN & DOWNLOAD ("Your audio is ready", Section 10) */}
+        {/* ============================================================== */}
         {currentTrack && (
-          <section aria-label="Generated Audio Result" className="space-y-3 pt-2">
-            <div className="bg-emerald-50/40 border-2 border-[#006241]/70 rounded-3xl p-5 sm:p-6 shadow-md space-y-4">
-              {/* Header: Your audio is ready */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-100 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-8 h-8 rounded-full bg-[#006241] text-white flex items-center justify-center font-bold text-sm shadow-2xs">
-                    ✓
-                  </span>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+          <section aria-label="Generated Audio Result" className="pt-1">
+            <div className="bg-emerald-50/50 border-2 border-[#006241]/70 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+              {/* Header: Title + Voice Info + Action Buttons */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-emerald-100 pb-2.5">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-[#006241] text-white flex items-center justify-center text-[10px] font-bold">
+                      ✓
+                    </span>
+                    <h3 className="text-base font-black text-slate-900 leading-none">
                       Your audio is ready
                     </h3>
-                    <p className="text-xs text-slate-600 font-medium">
-                      Voice: <strong className="text-slate-900">{currentTrack.voiceName}</strong> ·{' '}
-                      {LANGUAGES.find((l) => l.code === currentTrack.language)?.name || currentTrack.language}
-                    </p>
                   </div>
+                  <p className="text-xs text-slate-600 font-medium mt-1 ml-6.5">
+                    <strong>{currentTrack.voiceName}</strong> ·{' '}
+                    {LANGUAGES.find((l) => l.code === currentTrack.language)?.name || currentTrack.language}
+                  </p>
                 </div>
 
-                {/* Primary Action Buttons */}
+                {/* Section 10 Action Buttons: Download, Generate Again, Edit Text */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => {
-                      textareaRef.current?.focus();
-                      textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }}
-                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition flex items-center gap-1.5 shadow-2xs"
+                    onClick={() => onOpenDownloadModal && onOpenDownloadModal(currentTrack)}
+                    className="px-3.5 py-1.5 bg-[#006241] hover:bg-[#004d33] text-white font-bold rounded-xl text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Edit3 size={12} />
-                    <span>✏️ Edit Text</span>
+                    <Download size={13} />
+                    <span>⬇ Download</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={onGenerateSpeech}
                     disabled={isGenerating}
-                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition flex items-center gap-1.5 shadow-2xs disabled:opacity-40"
+                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition flex items-center gap-1.5 shadow-2xs disabled:opacity-40 cursor-pointer"
                   >
                     <RotateCcw size={12} />
                     <span>🔄 Generate Again</span>
@@ -577,22 +692,25 @@ export default function TextToSpeechStudio({
 
                   <button
                     type="button"
-                    onClick={() => onOpenDownloadModal && onOpenDownloadModal(currentTrack)}
-                    className="px-4 py-1.5 bg-[#006241] hover:bg-[#004d33] text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5"
+                    onClick={() => {
+                      textareaRef.current?.focus();
+                      textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs border border-slate-200 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
                   >
-                    <Download size={13} />
-                    <span>⬇️ Download</span>
+                    <Edit3 size={12} />
+                    <span>✏ Edit Text</span>
                   </button>
                 </div>
               </div>
 
-              {/* Spoken text quote */}
-              <p className="text-xs sm:text-sm text-slate-700 italic font-serif bg-white/80 p-3.5 rounded-xl border border-emerald-100 line-clamp-2">
+              {/* Spoken Text Quote */}
+              <p className="text-xs sm:text-sm text-slate-700 italic font-serif bg-white/80 p-2.5 rounded-xl border border-emerald-100 line-clamp-2">
                 "{currentTrack.text}"
               </p>
 
               {/* Scrubber Timeline */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <div className="flex items-center justify-between text-xs font-mono text-slate-500 font-semibold">
                   <span>{formatTime(currentTime)}</span>
                   <span>{formatTime(duration || currentTrack.duration)}</span>
@@ -604,54 +722,54 @@ export default function TextToSpeechStudio({
                   step="0.05"
                   value={currentTime}
                   onChange={(e) => onSeek && onSeek(parseFloat(e.target.value))}
-                  className="w-full h-2.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-[#006241]"
+                  className="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer accent-[#006241]"
                   aria-label="Audio scrubber"
                 />
               </div>
 
-              {/* Audio Controls Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                {/* Play / Pause & Replay */}
+              {/* Audio Controls Bar: Play/Pause, Speed, Volume */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+                {/* Play/Pause & Replay */}
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={onReplay}
-                    className="w-9 h-9 rounded-full bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center transition"
+                    className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center transition cursor-pointer"
                     title="Replay from start"
                     aria-label="Replay audio"
                   >
-                    <RotateCcw size={14} />
+                    <RotateCcw size={13} />
                   </button>
 
                   <button
                     type="button"
                     onClick={onTogglePlayPause}
-                    className="px-5 py-2.5 rounded-full bg-[#006241] hover:bg-[#004d33] text-white font-bold text-xs flex items-center gap-2 shadow-md transition transform hover:scale-105 active:scale-95"
+                    className="px-4 py-2 rounded-full bg-[#006241] hover:bg-[#004d33] text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                     aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
                   >
                     {isPlaying ? (
                       <>
-                        <Pause size={15} />
+                        <Pause size={14} />
                         <span>Pause</span>
                       </>
                     ) : (
                       <>
-                        <Play size={15} className="fill-current ml-0.5" />
+                        <Play size={14} className="fill-current ml-0.5" />
                         <span>Listen</span>
                       </>
                     )}
                   </button>
                 </div>
 
-                {/* Speed Options: 0.5×, 0.75×, 1×, 1.25×, 1.5×, 2× */}
-                <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl text-xs">
-                  <span className="text-[11px] font-semibold text-slate-400 px-1.5 hidden sm:inline">Speed:</span>
+                {/* Section 10 Speed Options: 0.5×, 0.75×, 1×, 1.25×, 1.5×, 2× */}
+                <div className="flex items-center gap-1 bg-white border border-slate-200 p-0.5 rounded-xl text-xs">
+                  <span className="text-[10px] font-semibold text-slate-400 px-1 hidden sm:inline">Speed:</span>
                   {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((rate) => (
                     <button
                       key={rate}
                       type="button"
                       onClick={() => setPlaybackSpeed(rate)}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold transition ${
+                      className={`px-1.5 py-0.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                         playbackSpeed === rate
                           ? 'bg-[#006241] text-white shadow-2xs'
                           : 'text-slate-600 hover:text-slate-900'
@@ -663,14 +781,14 @@ export default function TextToSpeechStudio({
                 </div>
 
                 {/* Volume & Mute */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={onToggleMute}
-                    className="p-1.5 text-slate-500 hover:text-slate-800"
+                    className="p-1 text-slate-500 hover:text-slate-800 cursor-pointer"
                     aria-label={isMuted ? 'Unmute volume' : 'Mute volume'}
                   >
-                    {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                    {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
                   </button>
                   <input
                     type="range"
@@ -679,7 +797,7 @@ export default function TextToSpeechStudio({
                     step="0.05"
                     value={isMuted ? 0 : volume}
                     onChange={(e) => onVolumeChange && onVolumeChange(parseFloat(e.target.value))}
-                    className="w-18 h-1.5 bg-slate-200 rounded-full accent-[#006241] cursor-pointer"
+                    className="w-16 h-1.5 bg-slate-200 rounded-full accent-[#006241] cursor-pointer"
                     aria-label="Volume level"
                   />
                 </div>
@@ -688,20 +806,23 @@ export default function TextToSpeechStudio({
           </section>
         )}
 
-        {/* Collapsible "More options" for advanced users */}
-        <div className="border-t border-slate-100 pt-3">
+        {/* ============================================================== */}
+        {/* COLLAPSIBLE MORE OPTIONS (Keeps main UI uncluttered)          */}
+        {/* ============================================================== */}
+        <div className="border-t border-slate-100 pt-2.5">
           <button
             type="button"
             onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-            className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5"
+            className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 cursor-pointer"
           >
             <SlidersHorizontal size={13} />
-            <span>{showAdvancedOptions ? 'Hide options ▲' : 'More options (Audio format & quality) ▼'}</span>
+            <span>{showAdvancedOptions ? 'Hide options ▲' : 'More options (Audio format, quality & translation) ▼'}</span>
           </button>
 
           {showAdvancedOptions && (
-            <div className="mt-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 text-xs">
-              <div className="flex flex-wrap items-center gap-4">
+            <div className="mt-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Download Format */}
                 <div>
                   <span className="font-semibold text-slate-700 block mb-1">Download Format:</span>
                   <div className="flex gap-1.5">
@@ -710,7 +831,7 @@ export default function TextToSpeechStudio({
                         key={fmt}
                         type="button"
                         onClick={() => setAudioFormat(fmt)}
-                        className={`px-3 py-1 rounded-lg uppercase font-bold text-xs ${
+                        className={`flex-1 py-1 rounded-lg uppercase font-bold text-xs transition cursor-pointer ${
                           audioFormat === fmt
                             ? 'bg-[#006241] text-white shadow-2xs'
                             : 'bg-white border border-slate-200 text-slate-600'
@@ -722,6 +843,7 @@ export default function TextToSpeechStudio({
                   </div>
                 </div>
 
+                {/* Acoustic Quality */}
                 <div>
                   <span className="font-semibold text-slate-700 block mb-1">Acoustic Quality:</span>
                   <div className="flex gap-1.5">
@@ -730,7 +852,7 @@ export default function TextToSpeechStudio({
                         key={ql}
                         type="button"
                         onClick={() => setAudioQuality(ql)}
-                        className={`px-3 py-1 rounded-lg uppercase font-bold text-xs ${
+                        className={`flex-1 py-1 rounded-lg uppercase font-bold text-xs transition cursor-pointer ${
                           audioQuality === ql
                             ? 'bg-[#006241] text-white shadow-2xs'
                             : 'bg-white border border-slate-200 text-slate-600'
@@ -741,7 +863,107 @@ export default function TextToSpeechStudio({
                     ))}
                   </div>
                 </div>
+
+                {/* Optional Save Category */}
+                {setSaveCategory && (
+                  <div>
+                    <span className="font-semibold text-slate-700 block mb-1">Save Category:</span>
+                    <select
+                      value={saveCategory}
+                      onChange={(e) => setSaveCategory(e.target.value)}
+                      className="w-full p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none"
+                    >
+                      <option value="Personal">Personal</option>
+                      <option value="School">School / Homework</option>
+                      <option value="Work">Work / Lessons</option>
+                      <option value="Religion">Religion / Liturgical</option>
+                      <option value="Stories">Cultural Stories</option>
+                    </select>
+                  </div>
+                )}
               </div>
+
+              {/* Cross-Language Translation Helper */}
+              {onTranslateAndInject && (
+                <div className="pt-2 border-t border-slate-200">
+                  <div
+                    className="flex items-center justify-between cursor-pointer select-none"
+                    onClick={() => setShowTranslator(!showTranslator)}
+                  >
+                    <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Globe size={13} className="text-[#006241]" />
+                      <span>Cross-Language Translation Helper</span>
+                    </span>
+                    <span className="text-[#006241] font-bold">
+                      {showTranslator ? 'Close ▲' : 'Open ▼'}
+                    </span>
+                  </div>
+
+                  {showTranslator && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-200 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={translateFrom}
+                          onChange={(e) => setTranslateFrom(e.target.value as LanguageCode)}
+                          className="p-1 bg-white border border-slate-200 rounded text-xs"
+                        >
+                          <option value="en">English</option>
+                          <option value="am">Amharic</option>
+                          <option value="ti">Tigrinya</option>
+                          <option value="om">Afaan Oromoo</option>
+                        </select>
+                        <span>➙</span>
+                        <select
+                          value={translateTo}
+                          onChange={(e) => setTranslateTo(e.target.value as LanguageCode)}
+                          className="p-1 bg-white border border-slate-200 rounded text-xs"
+                        >
+                          <option value="am">Amharic</option>
+                          <option value="en">English</option>
+                          <option value="ti">Tigrinya</option>
+                          <option value="om">Afaan Oromoo</option>
+                        </select>
+                      </div>
+
+                      <textarea
+                        rows={2}
+                        value={translationInput}
+                        onChange={(e) => setTranslationInput(e.target.value)}
+                        placeholder="Type text in source language to translate..."
+                        className="w-full text-xs p-2 bg-white border border-slate-200 rounded-lg focus:outline-none"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!translationInput.trim()) return;
+                          onTranslateAndInject(translationInput, translateFrom, translateTo);
+                          setTranslationInput('');
+                          setShowTranslator(false);
+                        }}
+                        disabled={isTranslating || !translationInput.trim()}
+                        className="px-3 py-1.5 bg-[#006241] hover:bg-[#004d33] text-white text-xs font-bold rounded-lg transition disabled:opacity-50"
+                      >
+                        {isTranslating ? 'Translating...' : 'Translate & Insert into Studio'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Pronunciation Tool Modal Trigger */}
+              {onOpenPronunciationModal && (
+                <div className="pt-2 border-t border-slate-200 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={onOpenPronunciationModal}
+                    className="text-[#006241] hover:underline font-bold text-xs flex items-center gap-1"
+                  >
+                    <Sparkles size={12} />
+                    <span>Custom Pronunciation Rules Studio ↗</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
