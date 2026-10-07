@@ -40,27 +40,27 @@ export default function Footer({ onSelectTab }: FooterProps) {
             <ul className="space-y-2">
               <li>
                 <button onClick={() => onSelectTab('tts')} className="hover:text-white transition-colors">
-                  Synthesis Studio Lab
+                  Text to Speech
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectTab('voices')} className="hover:text-white transition-colors">
-                  Voice & Dialect Directory
-                </button>
-              </li>
-              <li>
-                <button onClick={() => onSelectTab('ocr')} className="hover:text-white transition-colors">
-                  Optical OCR Manuscript Scanner
-                </button>
-              </li>
-              <li>
-                <button onClick={() => onSelectTab('docs')} className="hover:text-white transition-colors">
-                  Continuous Document Reader
+                  All 13 Voices
                 </button>
               </li>
               <li>
                 <button onClick={() => onSelectTab('library')} className="hover:text-white transition-colors">
-                  Archived Audio Library
+                  My Audio
+                </button>
+              </li>
+              <li>
+                <button onClick={() => onSelectTab('ocr')} className="hover:text-white transition-colors">
+                  OCR Scanner
+                </button>
+              </li>
+              <li>
+                <button onClick={() => onSelectTab('docs')} className="hover:text-white transition-colors">
+                  Audiobook Reader
                 </button>
               </li>
             </ul>

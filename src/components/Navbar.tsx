@@ -15,6 +15,8 @@ interface NavbarProps {
   onToggleAccessibility: () => void;
   onOpenUpgradeModal: () => void;
   onOpenAuthModal: () => void;
+  onOpenHelpModal: () => void;
+  onOpenSettingsModal: () => void;
 }
 
 export default function Navbar({
@@ -28,32 +30,47 @@ export default function Navbar({
   accessibilityMode,
   onToggleAccessibility,
   onOpenUpgradeModal,
-  onOpenAuthModal
+  onOpenAuthModal,
+  onOpenHelpModal,
+  onOpenSettingsModal
 }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
 
-  // Clear labels per prompt requirements
-  const primaryNavLinks = [
+  // Exact core links per UX brief: Home, Text to Speech, My Audio, Pricing
+  const mainNavLinks = [
     { id: 'home', label: 'Home' },
-    { id: 'tts', label: 'Speech Studio' },
-    { id: 'voices', label: 'Voices' },
-    { id: 'docs', label: 'Documents' },
-    { id: 'ocr', label: 'OCR Scanner' },
-    { id: 'library', label: 'History' },
-    { id: 'pricing', label: 'Pricing' },
-    { id: 'about', label: 'About' }
+    { id: 'tts', label: 'Text to Speech' },
+    { id: 'library', label: 'My Audio' },
+    { id: 'pricing', label: 'Pricing' }
   ];
 
-  const secondaryNavLinks = [
-    { id: 'docs-api', label: 'API & Docs' },
-    { id: 'admin', label: 'Admin Metrics' }
+  // Secondary items under More: OCR Scanner, Audiobook Reader, About EthioVoice, Developer API, Help, Settings
+  const moreNavLinks = [
+    { id: 'ocr', label: 'OCR Scanner', type: 'tab' },
+    { id: 'docs', label: 'Audiobook Reader', type: 'tab' },
+    { id: 'about', label: 'About EthioVoice', type: 'tab' },
+    { id: 'docs-api', label: 'Developer API', type: 'tab' },
+    { id: 'help', label: 'Help & Guide', type: 'action' },
+    { id: 'settings', label: 'Settings', type: 'action' }
   ];
 
   const handleNavClick = (tabId: string) => {
     onSelectTab(tabId);
     setMobileMenuOpen(false);
     setMoreDropdownOpen(false);
+  };
+
+  const handleMoreAction = (item: { id: string; label: string; type: string }) => {
+    setMoreDropdownOpen(false);
+    setMobileMenuOpen(false);
+    if (item.id === 'help') {
+      onOpenHelpModal();
+    } else if (item.id === 'settings') {
+      onOpenSettingsModal();
+    } else {
+      onSelectTab(item.id);
+    }
   };
 
   return (
@@ -66,7 +83,7 @@ export default function Navbar({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
-        {/* Brand Wordmark */}
+        {/* Brand Wordmark: Logo EthioVoice + Tagline 'Ethiopian voices, powered by AI.' */}
         <button
           type="button"
           onClick={() => handleNavClick('home')}
@@ -80,15 +97,15 @@ export default function Navbar({
             <span className="text-xl font-extrabold tracking-tight text-slate-900 group-hover:text-[#006241] transition-colors leading-none">
               EthioVoice
             </span>
-            <span className="text-[10px] text-slate-500 font-semibold tracking-wide">
-              AI Speech Studio
+            <span className="text-[11px] text-slate-500 font-medium tracking-normal mt-0.5">
+              Ethiopian voices, powered by AI.
             </span>
           </div>
         </button>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-5 text-sm font-semibold text-slate-600" aria-label="Main Navigation">
-          {primaryNavLinks.map((item) => (
+        <nav className="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-600" aria-label="Main Navigation">
+          {mainNavLinks.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -108,22 +125,33 @@ export default function Navbar({
             <button
               type="button"
               onClick={() => setMoreDropdownOpen(!moreDropdownOpen)}
-              onBlur={() => setTimeout(() => setMoreDropdownOpen(false), 200)}
-              className="flex items-center gap-1 text-slate-500 hover:text-slate-900 py-1 transition"
+              className="flex items-center gap-1 text-slate-600 hover:text-slate-900 py-1 transition cursor-pointer"
+              aria-expanded={moreDropdownOpen}
+              aria-haspopup="true"
             >
               <span>More</span>
-              <ChevronDown size={14} />
+              <ChevronDown size={14} className={`transform transition-transform ${moreDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
+
             {moreDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-44 bg-white border border-slate-200 rounded-2xl shadow-lg py-2 z-50">
-                {secondaryNavLinks.map((sub) => (
+              <div
+                className="absolute left-0 mt-2 w-52 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+                role="menu"
+              >
+                {moreNavLinks.map((item) => (
                   <button
-                    key={sub.id}
+                    key={item.id}
                     type="button"
-                    onClick={() => handleNavClick(sub.id)}
-                    className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => handleMoreAction(item)}
+                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-[#006241] transition flex items-center justify-between"
+                    role="menuitem"
                   >
-                    {sub.label}
+                    <span>{item.label}</span>
+                    {item.type === 'action' && (
+                      <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                        Option
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -199,13 +227,13 @@ export default function Navbar({
             </button>
           )}
 
-          {/* Primary Action Button: Launch Studio */}
+          {/* Primary Action Button: Start Speaking / Studio */}
           <button
             type="button"
             onClick={() => handleNavClick('tts')}
             className="px-3.5 sm:px-4 py-2 text-xs font-bold text-white bg-[#006241] hover:bg-[#004d33] rounded-xl shadow-xs transition whitespace-nowrap"
           >
-            Studio
+            Start Speaking
           </button>
 
           {/* Mobile hamburger menu toggle */}
@@ -225,23 +253,9 @@ export default function Navbar({
       {/* Responsive Mobile Drawer Menu */}
       {mobileMenuOpen && (
         <div className="lg:hidden bg-white border-b border-slate-200 px-4 pt-3 pb-6 space-y-4 shadow-xl">
-          {/* Main Mobile Navigation Grid */}
+          {/* Main Navigation Links */}
           <div className="grid grid-cols-2 gap-2 pb-3 border-b border-slate-100">
-            {primaryNavLinks.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleNavClick(item.id)}
-                className={`p-3 rounded-xl text-left text-xs font-bold transition min-h-[44px] flex items-center ${
-                  currentTab === item.id
-                    ? 'bg-emerald-50 text-[#006241] border border-emerald-200'
-                    : 'text-slate-700 bg-slate-50 hover:bg-slate-100'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-            {secondaryNavLinks.map((item) => (
+            {mainNavLinks.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -257,8 +271,25 @@ export default function Navbar({
             ))}
           </div>
 
+          {/* More options in mobile drawer */}
+          <div className="space-y-1">
+            <span className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">More Tools & Guides</span>
+            <div className="grid grid-cols-2 gap-1.5 pt-1">
+              {moreNavLinks.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleMoreAction(item)}
+                  className="p-2.5 rounded-xl text-left text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-emerald-50 hover:text-[#006241] transition"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Language selection on mobile */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 pt-2 border-t border-slate-100">
             <span className="text-xs text-slate-500 font-semibold block">Select Language:</span>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               {LANGUAGES.map((l) => (

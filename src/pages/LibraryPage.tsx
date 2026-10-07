@@ -73,13 +73,13 @@ export default function LibraryPage({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <p className="text-xs font-bold text-[#006241] uppercase tracking-wider">
-            Audio Archive & Recordings
+            Your Recordings & Saved Clips
           </p>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Speech History & Saved Audio
+            My Audio
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-1">
-            Browse, listen to, download, or favorite your previously synthesized Ethiopian speech.
+            Browse, listen to, download, or favorite your previously synthesized Ethiopian speech clips.
           </p>
         </div>
 

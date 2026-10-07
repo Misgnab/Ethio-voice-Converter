@@ -14,6 +14,8 @@ import Footer from './components/Footer';
 import AudioPlayerDock from './components/AudioPlayerDock';
 import SubscriptionModal from './components/SubscriptionModal';
 import DownloadFormatModal from './components/DownloadFormatModal';
+import HelpModal from './components/HelpModal';
+import SettingsModal from './components/SettingsModal';
 import HomePage from './pages/HomePage';
 import StudioPage from './pages/StudioPage';
 import VoiceExplorerPage from './pages/VoiceExplorerPage';
@@ -70,6 +72,8 @@ export default function App() {
   const [conversionsLeft, setConversionsLeft] = useState(20);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [authInputEmail, setAuthInputEmail] = useState('');
 
   // Audio Format Download Selector Modal (WAV, MP3, AAC)
@@ -279,6 +283,7 @@ export default function App() {
       });
 
       audioRef.current = audio;
+      (audio as any)._trackId = item.id;
 
       if (autoPlay) {
         setIsPlaying(true);
@@ -312,7 +317,7 @@ export default function App() {
     }
 
     // Ensure audioRef is pointing to currentTrack
-    if (!audioRef.current || audioRef.current.src !== currentTrack.audioUrl) {
+    if (!audioRef.current || (audioRef.current as any)._trackId !== currentTrack.id) {
       loadTrackAudio(currentTrack, true);
       return;
     }
@@ -351,14 +356,30 @@ export default function App() {
 
   const handleReplay = () => {
     if (currentTrack) {
-      loadTrackAudio(currentTrack, true);
+      if (audioRef.current && (audioRef.current as any)._trackId === currentTrack.id) {
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
+        audioRef.current.playbackRate = playbackSpeed;
+        audioRef.current.volume = isMuted ? 0 : volume;
+        audioRef.current
+          .play()
+          .then(() => setIsPlaying(true))
+          .catch((err) => {
+            console.warn('Replay failed:', err);
+            setIsPlaying(false);
+          });
+      } else {
+        loadTrackAudio(currentTrack, true);
+      }
     }
   };
 
   const handleSeek = (time: number) => {
-    setCurrentTime(time);
+    const validDuration = duration || currentTrack?.duration || 0;
+    const clampedTime = Math.max(0, validDuration > 0 ? Math.min(time, validDuration) : time);
+    setCurrentTime(clampedTime);
     if (audioRef.current) {
-      audioRef.current.currentTime = time;
+      audioRef.current.currentTime = clampedTime;
     }
   };
 
@@ -748,6 +769,8 @@ export default function App() {
         }}
         onOpenUpgradeModal={() => setShowUpgradeModal(true)}
         onOpenAuthModal={() => setShowAuthModal(true)}
+        onOpenHelpModal={() => setShowHelpModal(true)}
+        onOpenSettingsModal={() => setShowSettingsModal(true)}
       />
 
       {/* Main Page Routing Container */}
@@ -770,6 +793,36 @@ export default function App() {
                 activePreviewVoiceId={activePreviewVoiceId}
                 isPlayingPreview={isPlayingPreview}
                 onOpenUpgradeModal={() => setShowUpgradeModal(true)}
+                inputText={inputText}
+                setInputText={setInputText}
+                selectedLanguage={selectedLanguage}
+                setSelectedLanguage={setSelectedLanguage}
+                selectedVoiceId={selectedVoiceId}
+                setSelectedVoiceId={setSelectedVoiceId}
+                playbackSpeed={playbackSpeed}
+                setPlaybackSpeed={setPlaybackSpeed}
+                audioFormat={audioFormat}
+                setAudioFormat={setAudioFormat}
+                audioQuality={audioQuality}
+                setAudioQuality={setAudioQuality}
+                onGenerateSpeech={handleGenerateSpeech}
+                isGenerating={isGeneratingSpeech}
+                currentTrack={currentTrack}
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+                duration={duration}
+                volume={volume}
+                isMuted={isMuted}
+                onTogglePlayPause={handleTogglePlayPause}
+                onSeek={handleSeek}
+                onVolumeChange={handleVolumeChange}
+                onToggleMute={handleToggleMute}
+                onReplay={handleReplay}
+                onOpenDownloadModal={handleOpenDownloadModal}
+                conversionsLeft={conversionsLeft}
+                isPremium={isPremium}
+                triggerToast={triggerToast}
+                onOpenHelpModal={() => setShowHelpModal(true)}
               />
             </motion.div>
           )}
@@ -1188,6 +1241,47 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* EthioVoice Help & Guide Modal */}
+      <HelpModal
+        isOpen={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+        onNavigateTab={(tab) => {
+          setShowHelpModal(false);
+          setCurrentTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
+
+      {/* EthioVoice Settings & Preferences Modal */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        selectedLanguage={selectedLanguage}
+        onSelectLanguage={setSelectedLanguage}
+        selectedVoiceId={selectedVoiceId}
+        onSelectVoiceId={setSelectedVoiceId}
+        playbackSpeed={playbackSpeed}
+        onSelectPlaybackSpeed={setPlaybackSpeed}
+        audioFormat={audioFormat}
+        onSelectAudioFormat={setAudioFormat}
+        audioQuality={audioQuality}
+        onSelectAudioQuality={setAudioQuality}
+        accessibilityMode={accessibilityMode}
+        onToggleAccessibility={() => {
+          setAccessibilityMode(!accessibilityMode);
+          triggerToast(
+            !accessibilityMode ? 'Large accessibility mode enabled' : 'Standard mode restored',
+            'info'
+          );
+        }}
+        onClearHistory={() => {
+          setHistoryItems([]);
+          localStorage.removeItem('ethiovoice_history');
+          triggerToast('Local speech history cleared', 'info');
+        }}
+        triggerToast={triggerToast}
+      />
 
       {/* Global Alert Notification Toast */}
       <AnimatePresence>
