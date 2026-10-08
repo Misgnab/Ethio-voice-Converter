@@ -74,17 +74,59 @@ export default function DocumentReaderPage({
     if (!file) return;
 
     const fileName = file.name;
-    const reader = new FileReader();
+    const ext = (fileName.split('.').pop() || '').toLowerCase();
 
-    reader.onload = (event) => {
-      const text = (event.target?.result as string) || '';
-      if (text) {
-        processExtractedText(text, fileName);
-        triggerToast(`Extracted ${fileName} successfully!`, 'success');
-      }
-    };
+    // Plain text formats (.txt, .md)
+    if (ext === 'txt' || ext === 'md') {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = (event.target?.result as string) || '';
+        if (text.trim()) {
+          processExtractedText(text, fileName);
+          triggerToast(`Extracted ${fileName} successfully!`, 'success');
+        } else {
+          triggerToast('Uploaded text file was empty', 'error');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+      return;
+    }
 
-    reader.readAsText(file);
+    // Binary documents (.pdf, .docx): use real server-side parser
+    if (ext === 'pdf' || ext === 'docx') {
+      triggerToast(`Extracting text from ${fileName}...`, 'info');
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const fileBase64 = event.target?.result as string;
+          const res = await fetch('/api/document/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileBase64,
+              filename: fileName,
+              mimeType: file.type
+            })
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            triggerToast(data.error || 'Failed to extract text from document', 'error');
+            return;
+          }
+          processExtractedText(data.text, fileName);
+          triggerToast(`Extracted ${data.wordCount} words from ${fileName}`, 'success');
+        } catch (err: any) {
+          triggerToast(err.message || 'Error extracting document', 'error');
+        }
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+      return;
+    }
+
+    triggerToast('Unsupported file type. Please upload a .txt, .md, .pdf, or .docx file.', 'error');
+    e.target.value = '';
   };
 
   const handleLoadSample = (sampleType: 'dam' | 'fikr' | 'gadaa' | 'axum' | 'diplomacy') => {

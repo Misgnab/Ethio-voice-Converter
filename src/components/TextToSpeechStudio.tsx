@@ -649,7 +649,7 @@ export default function TextToSpeechStudio({
         {/* ============================================================== */}
         {/* STEP 5 — LISTEN & DOWNLOAD ("Your audio is ready", Section 10) */}
         {/* ============================================================== */}
-        {currentTrack && (
+        {currentTrack && Boolean(currentTrack.audioUrl || (currentTrack as any).audio_url) && (
           <section aria-label="Generated Audio Result" className="pt-1">
             <div className="bg-emerald-50/50 border-2 border-[#006241]/70 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
               {/* Header: Title + Voice Info + Action Buttons */}

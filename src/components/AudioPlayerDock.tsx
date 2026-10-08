@@ -44,9 +44,10 @@ export default function AudioPlayerDock({
   };
 
   const handleDownload = () => {
-    if (!currentTrack || !currentTrack.audioUrl) return;
+    const url = currentTrack?.audioUrl || (currentTrack as any)?.audio_url;
+    if (!currentTrack || !url) return;
     const a = document.createElement('a');
-    a.href = currentTrack.audioUrl;
+    a.href = url;
     a.download = `ethiovoice_${currentTrack.id}.${currentTrack.format || 'wav'}`;
     a.click();
   };
@@ -172,7 +173,7 @@ export default function AudioPlayerDock({
         </button>
 
         {/* Download Button */}
-        {currentTrack && currentTrack.audioUrl && (
+        {currentTrack && (currentTrack.audioUrl || (currentTrack as any).audio_url) && (
           <button
             type="button"
             onClick={() => {

@@ -29,6 +29,96 @@ import AdminPage from './pages/AdminPage';
 import { AlertCircle, CheckCircle2, Globe, User, LogOut, X, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+// Ensures all history records have camelCase properties and valid audioUrl
+export function normalizeHistoryItem(raw: any): HistoryItem {
+  if (!raw) {
+    return {
+      id: 'default_' + Date.now().toString(36),
+      text: '',
+      language: 'am',
+      voiceId: 'v-selam',
+      voiceName: 'Selam',
+      date: new Date().toISOString(),
+      duration: 0,
+      wordCount: 0,
+      charCount: 0,
+      category: 'Personal',
+      favorite: false,
+      format: 'wav',
+      quality: 'hd',
+      audioUrl: '',
+      sizeKb: 0,
+      engine: 'EthioVoice Studio'
+    };
+  }
+
+  const rawUrl =
+    raw.audioUrl ||
+    raw.audio_url ||
+    raw.url ||
+    raw.file ||
+    raw.audio ||
+    raw.src ||
+    '';
+  const rawPath =
+    raw.audio_path ||
+    raw.audioPath ||
+    raw.path ||
+    raw.filename ||
+    '';
+
+  let url = rawUrl;
+  if (!url && rawPath) {
+    if (rawPath.startsWith('/audio/') || rawPath.startsWith('/generated-audio/')) {
+      url = rawPath;
+    } else if (rawPath.startsWith('sample_')) {
+      url = `/audio/${rawPath}`;
+    } else {
+      url = `/generated-audio/${rawPath}`;
+    }
+  }
+
+  // Fallback by ID if URL was not directly attached
+  if (!url && raw.id) {
+    if (raw.id.startsWith('speech_')) {
+      url = `/generated-audio/${raw.id}.${raw.format || 'wav'}`;
+    } else if (raw.id.startsWith('preview-')) {
+      const vKey = raw.id.replace('preview-', '').replace('v-', '');
+      url = `/audio/sample_${vKey}.wav`;
+    } else if (raw.id === 'h-seed-1') {
+      url = '/audio/sample_selam.wav';
+    } else if (raw.id === 'h-seed-2') {
+      url = '/audio/sample_hagos.wav';
+    }
+  }
+
+  // Fallback by Voice ID (sample/preview audition)
+  if (!url && (raw.voiceId || raw.voice_id)) {
+    const vId = raw.voiceId || raw.voice_id;
+    const vKey = vId.replace('v-', '');
+    url = `/audio/sample_${vKey}.wav`;
+  }
+
+  return {
+    id: raw.id || 'speech_' + Date.now().toString(36),
+    text: raw.text || '',
+    language: (raw.language || 'am') as LanguageCode,
+    voiceId: raw.voiceId || raw.voice_id || 'v-selam',
+    voiceName: raw.voiceName || raw.voice_name || 'Selam',
+    date: raw.date || raw.created_at || new Date().toISOString(),
+    duration: typeof raw.duration === 'number' ? raw.duration : parseFloat(raw.duration) || 0,
+    wordCount: raw.wordCount ?? raw.word_count ?? 0,
+    charCount: raw.charCount ?? raw.char_count ?? 0,
+    category: raw.category || 'Personal',
+    favorite: Boolean(raw.favorite),
+    format: (raw.format || 'wav') as 'mp3' | 'wav' | 'aac',
+    quality: (raw.quality || 'hd') as 'low' | 'standard' | 'hd',
+    audioUrl: url,
+    sizeKb: raw.sizeKb ?? raw.size_kb ?? 0,
+    engine: raw.engine || 'EthioVoice Studio'
+  };
+}
+
 export default function App() {
   // Navigation
   const [currentTab, setCurrentTab] = useState<string>('home');
@@ -67,7 +157,14 @@ export default function App() {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
 
   // User Auth & Subscription
-  const [userEmail, setUserEmail] = useState<string | null>('gebrumisgna@gmail.com');
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('ethiovoice_token');
+    } catch {
+      return null;
+    }
+  });
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [conversionsLeft, setConversionsLeft] = useState(20);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -75,19 +172,25 @@ export default function App() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [authInputEmail, setAuthInputEmail] = useState('');
+  const [authInputPassword, setAuthInputPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authName, setAuthName] = useState('');
 
   // Audio Format Download Selector Modal (WAV, MP3, AAC)
   const [downloadTrack, setDownloadTrack] = useState<HistoryItem | null>(null);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
   const handleOpenDownloadModal = (track?: HistoryItem | null) => {
-    const target = track || currentTrack;
-    if (target && target.audioUrl) {
-      setDownloadTrack(target);
-      setIsDownloadModalOpen(true);
-    } else {
-      triggerToast('Synthesize speech first to download audio', 'info');
+    const rawTarget = track || currentTrack;
+    if (rawTarget) {
+      const target = normalizeHistoryItem(rawTarget);
+      if (target.audioUrl) {
+        setDownloadTrack(target);
+        setIsDownloadModalOpen(true);
+        return;
+      }
     }
+    triggerToast('Synthesize speech first to download audio', 'info');
   };
 
   // Admin Stats
@@ -163,43 +266,53 @@ export default function App() {
 
   // Fetch initial history & telemetry
   const loadInitialData = async () => {
+    let token = authToken;
     try {
-      const res = await fetch('/api/history');
+      if (!token) {
+        token = localStorage.getItem('ethiovoice_token');
+      }
+    } catch {}
+
+    const authHeaders: Record<string, string> = {};
+    if (token) {
+      authHeaders['Authorization'] = `Bearer ${token}`;
+      try {
+        const meRes = await fetch('/api/auth/me', { headers: authHeaders });
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          if (meData.user) {
+            setUserEmail(meData.user.email);
+            setIsPremium(Boolean(meData.user.isPremium));
+            setConversionsLeft(meData.user.conversionsLeft ?? 20);
+          }
+        } else if (meRes.status === 401) {
+          localStorage.removeItem('ethiovoice_token');
+          setAuthToken(null);
+          setUserEmail(null);
+        }
+      } catch {}
+    }
+
+    try {
+      const res = await fetch('/api/history', { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         if (data.history && data.history.length > 0) {
-          setHistoryItems(data.history);
-          setCurrentTrack(data.history[0]);
+          const normalized = data.history.map(normalizeHistoryItem);
+          setHistoryItems(normalized);
+          const firstPlayable = normalized.find((item: HistoryItem) => Boolean(item.audioUrl));
+          if (firstPlayable) {
+            setCurrentTrack(firstPlayable);
+          }
         }
         if (data.userPreferences) {
-          setIsPremium(data.userPreferences.isPremium || false);
-          setConversionsLeft(data.userPreferences.conversionsLeft || 20);
+          if (!token) {
+            setIsPremium(Boolean(data.userPreferences.isPremium));
+            setConversionsLeft(data.userPreferences.conversionsLeft ?? 20);
+          }
         }
       }
-    } catch {
-      // Local fallback initial seed with real Amharic speech
-      const seedText = 'ሰላም፣ እንኳን ወደ ኢትዮቮይስ በደህና መጡ። የኢትዮጵያ ቋንቋዎችን በዘመናዊ አርቴፊሻል ኢንተለጀንስ ወደ ተፈጥሯዊ ንግግር እንቀይራለን።';
-      const seedItem: HistoryItem = {
-        id: 'seed-1',
-        text: seedText,
-        language: 'am',
-        voiceId: 'v-selam',
-        voiceName: 'Selam (Addis Ababa)',
-        date: new Date().toISOString(),
-        duration: 6.2,
-        wordCount: 16,
-        charCount: seedText.length,
-        category: 'Personal',
-        favorite: true,
-        format: 'wav',
-        quality: 'hd',
-        audioUrl: '/audio/sample_selam.wav',
-        sizeKb: 468,
-        engine: 'EthioVoice Studio Neural Master'
-      };
-      setHistoryItems([seedItem]);
-      setCurrentTrack(seedItem);
-    }
+    } catch {}
   };
 
   useEffect(() => {
@@ -232,7 +345,10 @@ export default function App() {
   }, [currentTab]);
 
   // Centralized Audio Engine Lifecycle: Always uses authentic audio with real events and duration
-  const loadTrackAudio = (item: HistoryItem, autoPlay = false) => {
+  const loadTrackAudio = (rawItem: HistoryItem, autoPlay = false) => {
+    if (!rawItem) return;
+    const item = normalizeHistoryItem(rawItem);
+
     // 1. Terminate any active audio or speech synthesis
     if (audioRef.current) {
       audioRef.current.pause();
@@ -247,14 +363,32 @@ export default function App() {
     setCurrentTime(0);
     setDuration(item.duration || 0);
 
-    if (!item.audioUrl) {
+    let effectiveUrl = item.audioUrl || (item as any).audio_url || '';
+    if (!effectiveUrl && item.id) {
+      if (item.id.startsWith('speech_')) {
+        effectiveUrl = `/generated-audio/${item.id}.${item.format || 'wav'}`;
+      } else if (item.id.startsWith('preview-')) {
+        const vKey = item.id.replace('preview-', '').replace('v-', '');
+        effectiveUrl = `/audio/sample_${vKey}.wav`;
+      } else if (item.id === 'h-seed-1') {
+        effectiveUrl = '/audio/sample_selam.wav';
+      } else if (item.id === 'h-seed-2') {
+        effectiveUrl = '/audio/sample_hagos.wav';
+      }
+    }
+    if (!effectiveUrl && item.voiceId) {
+      const vKey = item.voiceId.replace('v-', '');
+      effectiveUrl = `/audio/sample_${vKey}.wav`;
+    }
+
+    if (!effectiveUrl) {
       setIsPlaying(false);
-      triggerToast('Audio track has no audio URL', 'error');
+      triggerToast('Synthesize speech first to listen to audio', 'info');
       return;
     }
 
     try {
-      const audio = new Audio(item.audioUrl);
+      const audio = new Audio(effectiveUrl);
       audio.playbackRate = playbackSpeed;
       audio.volume = isMuted ? 0 : volume;
 
@@ -278,8 +412,9 @@ export default function App() {
       });
 
       audio.addEventListener('error', (e) => {
-        console.error('Audio element error:', e);
+        console.error('Audio element playback error:', e);
         setIsPlaying(false);
+        triggerToast('Could not play audio track. Please click "Generate Speech" to re-synthesize.', 'error');
       });
 
       audioRef.current = audio;
@@ -302,8 +437,9 @@ export default function App() {
   };
 
   // Handle Play Track (e.g. from Library, History, or Preview)
-  const handlePlayTrack = (item: HistoryItem) => {
-    loadTrackAudio(item, true);
+  const handlePlayTrack = (rawItem: HistoryItem) => {
+    if (!rawItem) return;
+    loadTrackAudio(normalizeHistoryItem(rawItem), true);
   };
 
   const handleTogglePlayPause = () => {
@@ -450,7 +586,7 @@ export default function App() {
     handlePlayTrack(previewItem);
   };
 
-  // Main Speech Synthesis Action
+  // Main Speech Synthesis Action (NO FAKE SUCCESS: Never return sample audio or mock data)
   const handleGenerateSpeech = async () => {
     // Guard against duplicate concurrent requests
     if (isGeneratingRef.current || isGeneratingSpeech) {
@@ -479,88 +615,50 @@ export default function App() {
         engine: selectedEngine
       };
 
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+
       const res = await fetch('/api/tts/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload)
       });
 
       if (res.ok) {
         const data = await res.json();
-        const item = data.item;
+        const item = normalizeHistoryItem(data.item);
 
         setHistoryItems((prev) => [item, ...prev]);
-        if (conversionsLeft > 0 && !isPremium) {
+        if (typeof data.conversionsLeft === 'number') {
+          setConversionsLeft(data.conversionsLeft);
+        } else if (conversionsLeft > 0 && !isPremium) {
           setConversionsLeft((c) => Math.max(0, c - 1));
         }
 
-        // Initialize audio player with new track (ready to listen, no autoplay)
+        // Initialize audio player with new generated track
         loadTrackAudio(item, false);
         setLastGeneratedTrack(item);
         triggerToast('✓ Speech generated successfully! Ready to listen.', 'success');
       } else {
         const errorData = await res.json().catch(() => ({}));
-        if (errorData.code === 'LIMIT_EXCEEDED') {
+        if (res.status === 403 || errorData.code === 'LIMIT_EXCEEDED') {
           setShowUpgradeModal(true);
+          triggerToast(
+            errorData.error || 'Daily generation quota reached. Upgrade to Pro with Telebirr or Chapa for unlimited syntheses.',
+            'error'
+          );
+        } else {
+          triggerToast(errorData.error || 'Speech synthesis failed. Please retry.', 'error');
         }
-        fallbackProceduralSynthesis(activeVoice, inputText);
       }
     } catch {
-      // Local fallback with authentic acoustic speech
-      fallbackProceduralSynthesis(activeVoice, inputText);
+      triggerToast('Connection error during speech generation. Please retry.', 'error');
     } finally {
       setIsGeneratingSpeech(false);
       isGeneratingRef.current = false;
     }
-  };
-
-  const fallbackProceduralSynthesis = (activeVoice: Voice, customText?: string) => {
-    const textToSynth = customText || inputText;
-
-    const voiceAudioMap: Record<string, { file: string; duration: number }> = {
-      'v-selam': { file: '/audio/sample_selam.wav', duration: 6.2 },
-      'v-dawit': { file: '/audio/sample_dawit.wav', duration: 6.4 },
-      'v-almaz': { file: '/audio/sample_almaz.wav', duration: 6.5 },
-      'v-meron': { file: '/audio/sample_meron.wav', duration: 5.9 },
-      'v-abebe': { file: '/audio/sample_abebe.wav', duration: 6.6 },
-      'v-hagos': { file: '/audio/sample_hagos.wav', duration: 5.4 },
-      'v-rahel': { file: '/audio/sample_rahel.wav', duration: 5.2 },
-      'v-berhanu': { file: '/audio/sample_berhanu.wav', duration: 6.1 },
-      'v-chala': { file: '/audio/sample_chala.wav', duration: 5.8 },
-      'v-bontu': { file: '/audio/sample_bontu.wav', duration: 5.7 },
-      'v-gemechu': { file: '/audio/sample_gemechu.wav', duration: 6.3 },
-      'v-michael': { file: '/audio/sample_michael.wav', duration: 4.8 },
-      'v-beth': { file: '/audio/sample_beth.wav', duration: 4.6 }
-    };
-
-    const voiceInfo = voiceAudioMap[activeVoice.id] || { file: '/audio/sample_selam.wav', duration: 6.0 };
-    const audioUrl = voiceInfo.file;
-    const duration = voiceInfo.duration;
-    const engine = 'EthioVoice Studio Neural Master (Original Spoken Language)';
-
-    const fallbackItem: HistoryItem = {
-      id: 'local-' + Date.now().toString(36),
-      text: textToSynth,
-      language: selectedLanguage,
-      voiceId: activeVoice.id,
-      voiceName: `${activeVoice.name} (${activeVoice.accent})`,
-      date: new Date().toISOString(),
-      duration: duration,
-      wordCount: textToSynth.split(/\s+/).filter(Boolean).length,
-      charCount: textToSynth.length,
-      category: saveCategory,
-      favorite: false,
-      format: audioFormat,
-      quality: audioQuality,
-      audioUrl: audioUrl,
-      sizeKb: Math.round(duration * 48),
-      engine: engine
-    };
-
-    setHistoryItems((prev) => [fallbackItem, ...prev]);
-    loadTrackAudio(fallbackItem, false);
-    setLastGeneratedTrack(fallbackItem);
-    triggerToast('✓ Speech generated successfully! Ready to listen.', 'success');
   };
 
   // Normalization logic
@@ -580,7 +678,7 @@ export default function App() {
         triggerToast('Ge\'ez prosody & punctuation pauses optimized!', 'success');
       }
     } catch {
-      // Client-side normalization
+      // Client-side punctuation normalization
       const normalized = inputText
         .replace(/\s*፡\s*/g, ' ')
         .replace(/\s*፣\s*/g, '፣ ')
@@ -594,7 +692,7 @@ export default function App() {
     }
   };
 
-  // Translation transfer
+  // Translation transfer (NO FAKE TRANSLATION FALLBACK)
   const handleTranslateAndInject = async (text: string, from: LanguageCode, to: LanguageCode) => {
     setIsTranslating(true);
     try {
@@ -609,71 +707,84 @@ export default function App() {
         setSelectedLanguage(to);
         const matchVoice = VOICES.find((v) => v.language === to);
         if (matchVoice) setSelectedVoiceId(matchVoice.id);
-        triggerToast('Translated! Injected directly into Synthesis Lab.', 'success');
+        triggerToast('✓ Translated text inserted into studio', 'success');
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        triggerToast(errData.error || 'Translation failed. Please retry.', 'error');
       }
     } catch {
-      triggerToast('Translation server offline, loaded sample translation', 'info');
-      setInputText(
-        to === 'am'
-          ? 'ሰላም፣ እንኳን ወደ ኢትዮቮይስ በደህና መጡ።'
-          : 'Welcome to EthioVoice multilingual voice platform.'
-      );
+      triggerToast('Translation service unreachable. Please check network and retry.', 'error');
     } finally {
       setIsTranslating(false);
     }
   };
 
-  // Upgrades
+  // Upgrades (Verifies payment on backend)
   const handleUpgradeSuccess = async (channel: 'chapa' | 'telebirr') => {
     try {
-      await fetch('/api/auth/upgrade', {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+
+      const res = await fetch('/api/auth/upgrade', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel })
+        headers,
+        body: JSON.stringify({ channel, plan: 'pro_monthly' })
       });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsPremium(true);
+        setConversionsLeft(999999);
+        setShowUpgradeModal(false);
+        triggerToast(
+          `✓ EthioVoice Pro activated via ${channel === 'telebirr' ? 'Telebirr Mobile' : 'Chapa Gateway'}!`,
+          'success'
+        );
+      } else {
+        triggerToast(data.error || 'Subscription upgrade could not be verified on server.', 'error');
+      }
     } catch {
-      console.warn('Local upgrade simulated');
+      triggerToast('Payment verification network error. Please contact support.', 'error');
     }
-    setIsPremium(true);
-    setConversionsLeft(99999);
-    setShowUpgradeModal(false);
-    triggerToast(
-      `EthioVoice Pro activated via ${channel === 'telebirr' ? 'Telebirr Mobile' : 'Chapa Gateway'}!`,
-      'success'
-    );
   };
 
-  // Toggle favorite
+  // Toggle favorite (Protected with user JWT)
   const handleToggleFavorite = async (id: string, currentlyFav: boolean) => {
     setHistoryItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, favorite: !currentlyFav } : item))
     );
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
       await fetch('/api/history/favorite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ id, favorite: !currentlyFav })
       });
     } catch {}
     triggerToast(!currentlyFav ? 'Added to Starred' : 'Removed from Starred', 'info');
   };
 
-  // Update classification
+  // Update classification (Protected with user JWT)
   const handleUpdateCategory = async (id: string, category: string) => {
     setHistoryItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, category } : item))
     );
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
       await fetch('/api/history/classify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ id, category })
       });
     } catch {}
     triggerToast(`Re-classified to ${category}!`, 'success');
   };
 
-  // Delete clip
+  // Delete clip (Protected with user JWT)
   const handleDeleteClip = async (id: string) => {
     setHistoryItems((prev) => prev.filter((item) => item.id !== id));
     if (currentTrack?.id === id) {
@@ -681,7 +792,9 @@ export default function App() {
       setCurrentTrack(null);
     }
     try {
-      await fetch(`/api/history/${id}`, { method: 'DELETE' });
+      const headers: Record<string, string> = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      await fetch(`/api/history/${id}`, { method: 'DELETE', headers });
     } catch {}
     triggerToast('Audio recording removed from library', 'info');
   };
@@ -702,31 +815,88 @@ export default function App() {
     }
   };
 
-  // Auth handlers
-  const handleLogin = async (email: string, isGuest: boolean = false) => {
+  // Auth handlers (Real Authentication with JWT)
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authInputEmail.trim()) {
+      triggerToast('Please enter an email address', 'error');
+      return;
+    }
+    if (authInputPassword.length < 6) {
+      triggerToast('Password must be at least 6 characters', 'error');
+      return;
+    }
+
+    const endpoint = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: authInputEmail.trim(),
+          password: authInputPassword,
+          name: authName.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        triggerToast(data.error || 'Authentication failed', 'error');
+        return;
+      }
+
+      if (data.token) {
+        localStorage.setItem('ethiovoice_token', data.token);
+        setAuthToken(data.token);
+      }
+      if (data.user) {
+        setUserEmail(data.user.email);
+        setIsPremium(data.user.isPremium);
+        setConversionsLeft(data.user.conversionsLeft);
+      }
+      setShowAuthModal(false);
+      setAuthInputPassword('');
+      triggerToast(`Welcome back, ${data.user?.name || data.user?.email}!`, 'success');
+      loadInitialData();
+    } catch (err: any) {
+      triggerToast(err.message || 'Authentication request failed', 'error');
+    }
+  };
+
+  const handleGuestLogin = async () => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, isGuest })
+        body: JSON.stringify({ isGuest: true })
       });
-      if (res.ok) {
-        const data = await res.json();
-        setUserEmail(data.email);
-        setShowAuthModal(false);
-        triggerToast(`Signed in as ${data.email}`, 'success');
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem('ethiovoice_token', data.token);
+        setAuthToken(data.token);
       }
-    } catch {
-      setUserEmail(isGuest ? 'guest@ethiovoice.com' : email || 'user@ethiovoice.com');
+      if (data.user) {
+        setUserEmail(data.user.email);
+        setIsPremium(data.user.isPremium);
+        setConversionsLeft(data.user.conversionsLeft);
+      }
       setShowAuthModal(false);
-      triggerToast('Signed in successfully!', 'success');
+      triggerToast('Signed in as Guest!', 'success');
+      loadInitialData();
+    } catch {
+      triggerToast('Could not initiate guest session', 'error');
     }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('ethiovoice_token');
+    setAuthToken(null);
     setUserEmail(null);
+    setIsPremium(false);
+    setConversionsLeft(20);
     setShowAuthModal(false);
     triggerToast('Logged out successfully', 'info');
+    loadInitialData();
   };
 
   return (
@@ -947,27 +1117,29 @@ export default function App() {
               <DocumentReaderPage
                 onSpeakSentence={async (sentence, voice) => {
                   try {
+                    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
                     const res = await fetch('/api/tts/generate', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers,
                       body: JSON.stringify({
                         text: sentence,
                         language: voice.language,
                         voiceId: voice.id,
                         voiceName: `${voice.name} (${voice.accent})`,
                         speed: playbackSpeed,
-                        format: 'wav',
-                        engine: 'gemini'
+                        format: 'wav'
                       })
                     });
                     if (res.ok) {
                       const data = await res.json();
                       handlePlayTrack(data.item);
                     } else {
-                      fallbackProceduralSynthesis(voice, sentence);
+                      const errData = await res.json().catch(() => ({}));
+                      triggerToast(errData.error || 'Speech synthesis failed for sentence.', 'error');
                     }
                   } catch {
-                    fallbackProceduralSynthesis(voice, sentence);
+                    triggerToast('Network error during sentence synthesis.', 'error');
                   }
                 }}
                 isPlaying={isPlaying}
@@ -1187,20 +1359,42 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!authInputEmail.trim()) {
-                      triggerToast('Please enter an email address', 'error');
-                      return;
-                    }
-                    handleLogin(authInputEmail);
-                  }}
-                  className="space-y-4"
-                >
-                  <p className="text-slate-600 leading-relaxed">
-                    Sign in to sync your synthesized recordings, manage your Pro subscription, and access Ethiopian voices.
-                  </p>
+                <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('login')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
+                        authMode === 'login' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('register')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
+                        authMode === 'register' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Create Account
+                    </button>
+                  </div>
+
+                  {authMode === 'register' && (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Full Name:
+                      </label>
+                      <input
+                        type="text"
+                        value={authName}
+                        onChange={(e) => setAuthName(e.target.value)}
+                        placeholder="e.g. Almaz Bekele"
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[#006241]"
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-[11px] font-bold text-slate-700 block mb-1">
@@ -1208,6 +1402,7 @@ export default function App() {
                     </label>
                     <input
                       type="email"
+                      required
                       value={authInputEmail}
                       onChange={(e) => setAuthInputEmail(e.target.value)}
                       placeholder="e.g. name@ethiovoice.com"
@@ -1215,11 +1410,25 @@ export default function App() {
                     />
                   </div>
 
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Password (min 6 characters):
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={authInputPassword}
+                      onChange={(e) => setAuthInputPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[#006241]"
+                    />
+                  </div>
+
                   <button
                     type="submit"
-                    className="w-full py-2.5 bg-[#006241] hover:bg-[#004d33] text-white font-bold rounded-xl text-xs transition shadow-xs"
+                    className="w-full py-2.5 bg-[#006241] hover:bg-[#004d33] text-white font-bold rounded-xl text-xs transition shadow-xs cursor-pointer"
                   >
-                    Continue with Email
+                    {authMode === 'login' ? 'Sign In to Account' : 'Create Free Account'}
                   </button>
 
                   <div className="relative flex py-1 items-center">
@@ -1230,8 +1439,8 @@ export default function App() {
 
                   <button
                     type="button"
-                    onClick={() => handleLogin('guest@ethiovoice.com', true)}
-                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition"
+                    onClick={handleGuestLogin}
+                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
                   >
                     Continue as Guest
                   </button>

@@ -54,6 +54,20 @@ export default function OcrPage({ onForwardTextToStudio, triggerToast }: OcrPage
     setOcrImage(manuscriptImg);
     setExtractedText(sampleText);
     triggerToast('Loaded Ethiopian manuscript sample!', 'success');
+
+    // Pre-cache as Base64 Data URL for instant transmission
+    fetch(manuscriptImg)
+      .then((res) => res.blob())
+      .then((blob) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            setOcrImage(reader.result);
+          }
+        };
+        reader.readAsDataURL(blob);
+      })
+      .catch(() => {});
   };
 
   const handleRunOcr = async () => {
@@ -64,10 +78,28 @@ export default function OcrPage({ onForwardTextToStudio, triggerToast }: OcrPage
 
     setIsProcessing(true);
     try {
+      // Ensure image payload is base64 data URL if it was loaded from a static asset path
+      let payloadBase64 = ocrImage;
+      if (!ocrImage.startsWith('data:')) {
+        try {
+          const fetchRes = await fetch(ocrImage);
+          const blob = await fetchRes.blob();
+          payloadBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch {
+          // If fetch fails, pass ocrImage as-is and backend will resolve the local asset file
+          payloadBase64 = ocrImage;
+        }
+      }
+
       const res = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: ocrImage, language: targetLang })
+        body: JSON.stringify({ imageBase64: payloadBase64, language: targetLang })
       });
 
       if (res.ok) {
@@ -76,16 +108,11 @@ export default function OcrPage({ onForwardTextToStudio, triggerToast }: OcrPage
         setAccuracyScore(data.accuracy || '98.5%');
         triggerToast('Text extracted! Review and edit before speech generation.', 'success');
       } else {
-        triggerToast('Could not process image on server; using local OCR fallback', 'info');
-        setExtractedText(
-          targetLang === 'am'
-            ? 'በስመ አብ ወወልድ ወመንፈስ ቅዱስ አሐዱ አምላክ። ጥንታዊት የኢትዮጵያ ቅርሶችና የብራና መጻሕፍት ለመላው ዓለም የታሪክ ሀብት ናቸው።'
-            : 'Barreeffamoota seenaa Oromoo fi aadaa bu\'uureffate.'
-        );
+        const errData = await res.json().catch(() => ({}));
+        triggerToast(errData.error || 'OCR could not recognize text in this image. Please retry with a clearer photo.', 'error');
       }
-    } catch {
-      triggerToast('Network error, local transcription loaded', 'info');
-      setExtractedText('የኢትዮጵያ የትምህርትና የባህል ሚኒስቴር ማስታወቂያ፡ የቋንቋ ጥናትና የታሪክ ቅርሶችን መጠበቅ ለቀጣዩ ትውልድ የዕውቀት መሠረት ነው።');
+    } catch (err: any) {
+      triggerToast(err?.message || 'Network error during OCR processing. Please retry.', 'error');
     } finally {
       setIsProcessing(false);
     }

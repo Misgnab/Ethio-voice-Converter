@@ -159,30 +159,37 @@ export default function DownloadFormatModal({
         throw new Error(data.error || 'Server did not return converted audio');
       }
 
-      // Convert data URL to Blob for clean, compliant download with exact MIME type
-      const commaIdx = data.audioUrl.indexOf(',');
-      const base64Data = data.audioUrl.slice(commaIdx + 1);
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Uint8Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      if (data.audioUrl.startsWith('data:')) {
+        const commaIdx = data.audioUrl.indexOf(',');
+        const base64Data = data.audioUrl.slice(commaIdx + 1);
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Uint8Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+
+        const mimeType = data.mimeType || (fmt === 'mp3' ? 'audio/mpeg' : fmt === 'aac' ? 'audio/aac' : 'audio/wav');
+        const blob = new Blob([byteNumbers], { type: mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+
+        const downloadLink = document.createElement('a');
+        downloadLink.href = blobUrl;
+        downloadLink.download = data.filename || `ethiovoice_${track.id}.${fmt}`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+      } else {
+        const downloadLink = document.createElement('a');
+        downloadLink.href = data.audioUrl;
+        downloadLink.download = data.filename || `ethiovoice_${track.id}.${fmt}`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
       }
 
-      const mimeType = data.mimeType || (fmt === 'mp3' ? 'audio/mpeg' : fmt === 'aac' ? 'audio/aac' : 'audio/wav');
-      const blob = new Blob([byteNumbers], { type: mimeType });
-      const blobUrl = URL.createObjectURL(blob);
-
-      const downloadLink = document.createElement('a');
-      downloadLink.href = blobUrl;
-      downloadLink.download = data.filename || `ethiovoice_${track.id}.${fmt}`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-
-      // Clean up blob URL after delay
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-
-      const sizeKb = data.sizeKb || Math.round(blob.size / 1024);
+      const sizeKb = data.sizeKb || track.sizeKb || 120;
       setDownloadSuccess({
         format: fmt,
         filename: data.filename || `ethiovoice_${track.id}.${fmt}`,

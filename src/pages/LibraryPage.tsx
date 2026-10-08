@@ -252,7 +252,7 @@ export default function LibraryPage({
                   </button>
 
                   {/* Download format selector button */}
-                  {item.audioUrl && (
+                  {(item.audioUrl || (item as any).audio_url) && (
                     <button
                       type="button"
                       onClick={() => {
@@ -260,7 +260,7 @@ export default function LibraryPage({
                           onOpenDownloadModal(item);
                         } else {
                           const a = document.createElement('a');
-                          a.href = item.audioUrl;
+                          a.href = item.audioUrl || (item as any).audio_url;
                           a.download = `ethiovoice_${item.id}.${item.format || 'wav'}`;
                           a.click();
                         }

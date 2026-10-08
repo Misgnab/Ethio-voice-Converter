@@ -53,10 +53,10 @@ export default function VoiceExplorerPage({
           Voice Directory & Soundboard
         </p>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-          Authentic Ethiopian Voice Personas
+          Authentic Ethiopian Voices
         </h1>
         <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-          Explore our collection of 13 natural Ethiopian voices across Amharic, Tigrinya, Afaan Oromoo, and Ethiopian English. Audition real audio previews or select a persona for the Speech Studio.
+          Explore our collection of 13 natural voices across Amharic, Tigrinya, Afaan Oromoo, and Ethiopian English. Audition real audio previews or select a voice for the Speech Studio.
         </p>
       </div>
 
@@ -114,17 +114,17 @@ export default function VoiceExplorerPage({
             </select>
           </div>
 
-          {/* Region / Persona */}
+          {/* Region / Role */}
           <div>
             <label className="text-[11px] font-semibold text-slate-500 block mb-1">
-              Filter by Persona / Style:
+              Filter by Style / Role:
             </label>
             <select
               value={selectedPersona}
               onChange={(e) => setSelectedPersona(e.target.value)}
               className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#006241] font-medium"
             >
-              <option value="all">All Personas & Roles</option>
+              <option value="all">All Styles & Roles</option>
               {uniquePersonas.map((p) => (
                 <option key={p} value={p}>
                   {p}
